@@ -13,13 +13,20 @@ interface WalletContextType {
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
-
 const WALLET_STORAGE_KEY = "dongle_wallet_state";
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
+
+  // Declared before the polling effect so it can be referenced inside it
+  const disconnectWallet = useCallback(() => {
+    setPublicKey(null);
+    setIsConnected(false);
+    localStorage.removeItem(WALLET_STORAGE_KEY);
+    toast.success("Wallet disconnected");
+  }, []);
 
   useEffect(() => {
     const restoreWalletState = async () => {
@@ -46,45 +53,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     restoreWalletState();
   }, []);
 
-  // Poll for account changes
   useEffect(() => {
     if (!isConnected) return;
-
     const interval = setInterval(async () => {
       try {
         const currentKey = await walletService.getPublicKey();
         if (currentKey !== publicKey) {
-          console.info("Account change detected:", currentKey);
           setPublicKey(currentKey);
-          localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify({
-            publicKey: currentKey,
-            isConnected: true
-          }));
+          localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify({ publicKey: currentKey, isConnected: true }));
         }
       } catch (error) {
         console.error("Error checking account change:", error);
-        // If we can't get the public key anymore, it might mean the user disconnected from Freighter
         disconnectWallet();
       }
     }, 2000);
-
     return () => clearInterval(interval);
-  }, [isConnected, publicKey]);
+  }, [isConnected, publicKey, disconnectWallet]);
 
   const connectWallet = useCallback(async () => {
     if (isConnected) return;
-    
     setIsConnecting(true);
     const toastId = toast.loading("Connecting to Freighter...");
     try {
       const address = await walletService.connectWallet();
       setPublicKey(address);
       setIsConnected(true);
-      
-      localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify({
-        publicKey: address,
-        isConnected: true
-      }));
+      localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify({ publicKey: address, isConnected: true }));
       toast.success("Wallet connected successfully", { id: toastId });
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Wallet connection failed";
@@ -95,23 +89,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [isConnected]);
 
-  const disconnectWallet = useCallback(() => {
-    setPublicKey(null);
-    setIsConnected(false);
-    localStorage.removeItem(WALLET_STORAGE_KEY);
-    toast.success("Wallet disconnected");
-  }, []);
-
   return (
-    <WalletContext.Provider
-      value={{
-        publicKey,
-        isConnected,
-        isConnecting,
-        connectWallet,
-        disconnectWallet,
-      }}
-    >
+    <WalletContext.Provider value={{ publicKey, isConnected, isConnecting, connectWallet, disconnectWallet }}>
       {children}
     </WalletContext.Provider>
   );
@@ -119,8 +98,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
 export function useWallet(): WalletContextType {
   const context = useContext(WalletContext);
-  if (context === undefined) {
-    throw new Error("useWallet must be used within a WalletProvider");
-  }
+  if (context === undefined) throw new Error("useWallet must be used within a WalletProvider");
   return context;
 }

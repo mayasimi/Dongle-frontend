@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { FormField } from "@/components/ui/FormField";
 import { SelectField } from "@/components/ui/SelectField";
-import { TextAreaField } from "@/components/ui/TextAreaField";
+import RichTextEditor from "@/components/ui/RichTextEditor";
 import { sorobanService } from "@/services/stellar/soroban.service";
 import { toast } from "sonner";
 import { Rocket, CheckCircle2 } from "lucide-react";
@@ -21,7 +21,7 @@ const projectSchema = z.object({
   description: z
     .string()
     .min(10, "Description must be at least 10 characters")
-    .max(500),
+    .max(5000, "Description is too long"),
   url: z.string().url("Please enter a valid URL"),
   logoUrl: z
     .string()
@@ -54,15 +54,15 @@ type ProjectFormProps = {
 export default function ProjectForm({
   mode = "create",
   initialData,
-  projectId,
   onSubmit: customOnSubmit,
-}: ProjectFormProps = {}) {
+}: Omit<ProjectFormProps, "projectId"> & Pick<ProjectFormProps, "projectId"> = {}) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
     reset,
   } = useForm<ProjectFormValues>({
@@ -138,11 +138,19 @@ export default function ProjectForm({
           />
         </div>
 
-        <TextAreaField
-          label="Description"
-          placeholder="What does your project do? Keep it concise and engaging."
-          {...register("description")}
-          error={errors.description?.message}
+        <Controller
+          name="description"
+          control={control}
+          render={({ field }) => (
+            <RichTextEditor
+              label="Description"
+              placeholder="What does your project do? Describe features, use cases, and what makes it unique."
+              value={field.value}
+              onChange={field.onChange}
+              maxLength={2000}
+              error={errors.description?.message}
+            />
+          )}
         />
 
         <FormField

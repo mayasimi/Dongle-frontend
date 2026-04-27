@@ -1,5 +1,6 @@
 import React from "react";
 import { Project } from "@/data/mockProjects";
+import RichTextRenderer from "@/components/ui/RichTextRenderer";
 
 interface ProjectCardProps {
   project: Project;
@@ -27,9 +28,12 @@ export const ProjectCard = ({ project }: ProjectCardProps) => {
       <h3 className="text-xl font-bold mb-2 group-hover:text-blue-500 transition-colors">
         {project.name}
       </h3>
-      <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 line-clamp-2 grow">
-        {project.description}
-      </p>
+      <div className="mb-6 grow">
+        <RichTextRenderer
+          content={project.description}
+          truncate={120}
+        />
+      </div>
       <div className="text-xs text-zinc-400 dark:text-zinc-500 mt-auto">
         {project.reviews} reviews
       </div>
