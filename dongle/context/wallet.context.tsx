@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { walletService } from "@/services/wallet/wallet.service";
+import { toast } from "sonner";
 
 interface WalletContextType {
   publicKey: string | null;
@@ -45,10 +46,36 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     restoreWalletState();
   }, []);
 
+  // Poll for account changes
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const currentKey = await walletService.getPublicKey();
+        if (currentKey !== publicKey) {
+          console.info("Account change detected:", currentKey);
+          setPublicKey(currentKey);
+          localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify({
+            publicKey: currentKey,
+            isConnected: true
+          }));
+        }
+      } catch (error) {
+        console.error("Error checking account change:", error);
+        // If we can't get the public key anymore, it might mean the user disconnected from Freighter
+        disconnectWallet();
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isConnected, publicKey]);
+
   const connectWallet = useCallback(async () => {
     if (isConnected) return;
     
     setIsConnecting(true);
+    const toastId = toast.loading("Connecting to Freighter...");
     try {
       const address = await walletService.connectWallet();
       setPublicKey(address);
@@ -58,8 +85,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         publicKey: address,
         isConnected: true
       }));
+      toast.success("Wallet connected successfully", { id: toastId });
     } catch (error) {
+      const msg = error instanceof Error ? error.message : "Wallet connection failed";
       console.error("Wallet connection failed:", error);
+      toast.error(msg, { id: toastId });
     } finally {
       setIsConnecting(false);
     }
@@ -69,6 +99,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setPublicKey(null);
     setIsConnected(false);
     localStorage.removeItem(WALLET_STORAGE_KEY);
+    toast.success("Wallet disconnected");
   }, []);
 
   return (
